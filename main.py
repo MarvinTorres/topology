@@ -2,7 +2,7 @@
 
 Manage the network topology
 """
-import time
+import time, json
 
 from flask import jsonify, request
 
@@ -159,6 +159,113 @@ class Main(KytosNApp):  # pylint: disable=too-many-public-methods
             return jsonify(f'{str(exc)}'), 404
 
         return jsonify('Administrative status restored.'), 200
+
+    @rest('v3/metadata', methods=['POST'])
+    def add_topology_metadata(self):
+
+        ### Retrieve file from request
+        # File with the input field name as 'file'
+        # Check if there is a 'file' field
+        if 'file' not in request.files:
+            return jsonify('Missing field: \'file\''), 400
+        
+        # Get file from field
+        file = request.files['file']
+
+        # Check if field was empty
+        if file.filename is '':
+            return jsonify('Empty field: \'file\''), 400
+        
+        ### Read and Decode the file
+        # get the input stream
+        inputStream = file.stream
+        # Convert stream to python data structure
+        try:
+            inputObject = json.load(inputStream)
+        except JSONDecodeError:
+            return jsonify('Could not decode file as json'), 400
+        
+        ### Validate and Store results to storehouse
+        # Check it its a dict, discard if not
+        if not isinstance(inputObject, dict):
+            return jsonify('json produced incorrect type'), 400
+        
+        # Get list of switches
+        switches = inputObject.get('switches',None)
+        # skip iterating through switches if invalid type
+        if isinstance(switches, list):
+            for switch_data in switches:
+                # skip element if invalid
+                if not isinstance(switch_data, dict):
+                    continue
+                # Get dpid and switch with that dpid
+                try:
+                    dpid = switch_data['dpid']
+                    switch = self.controller.switches[dpid]
+                # Skip if getting the dpid or the switch fails
+                except KeyError: 
+                    continue
+
+                # get metadata
+                switch_metadata = switch_data.get('metadata', None)
+                # Confirm it is of the right types
+                if isinstance(switch_metadata, dict):
+                    # Update volatile
+                    switch.extend_metadata(switch_metadata)
+                    # Update Persistent
+                    self.notify_metadata_changes(switch,'added')
+                
+                # get list of interfaces
+                interfaces = switch_data.get('interfaces', None)
+                # skip iterating through interfaces if invalid type
+                if isinstance(interfaces, list):
+                    for interface_data in interfaces:
+                        # skip element if invalid
+                        if not isinstance(interface_data, dict):
+                            continue
+                        # Get port and interface at that port
+                        try:
+                            port = interface_data['port']
+                            interface = switch.interfaces[port]
+                        # Skip if getting the port or interface fails
+                        except KeyError: 
+                            continue
+                        
+                        # get metadata
+                        interface_metadata = interface_data.get('metadata', None)
+                        # Confirm it is of the right types
+                        if isinstance(interface_metadata, dict):
+                            # Update volatile
+                            interface.extend_metadata(interface_metadata)
+                            # Update Persistent
+                            self.notify_metadata_changes(interface,'added')
+
+        # Get list of links
+        links = inputObject.get('links',None)
+        # skip iterating through switches if invalid type
+        if isinstance(links, list):
+            for link_data in links:
+                # skip element if invalid
+                if not isinstance(link_data, dict):
+                    continue
+                # Get id and link with that id
+                try:
+                    link_id = link_data['id']
+                    link = self.links[link_id]
+                # Skip if getting the id or the link fails
+                except KeyError: 
+                    continue
+
+                # get metadata
+                link_metadata = link_data.get('metadata', None)
+                # Confirm it is of the right types
+                if isinstance(link_metadata, dict):
+                    # Update volatile
+                    link.extend_metadata(link_metadata)
+                    # Update Persistent
+                    self.notify_metadata_changes(link,'added')
+        ### return confirmation that the receive file was processed correctly
+        return jsonify('Operation successful'), 201
 
     # Switch related methods
     @rest('v3/switches')
