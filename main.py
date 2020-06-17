@@ -182,7 +182,7 @@ class Main(KytosNApp):  # pylint: disable=too-many-public-methods
         # Convert stream to python data structure
         try:
             inputObject = json.load(inputStream)
-        except JSONDecodeError:
+        except json.JSONDecodeError:
             return jsonify('Could not decode file as json'), 400
         
         ### Validate and Store results to storehouse

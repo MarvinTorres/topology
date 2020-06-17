@@ -161,6 +161,7 @@ class TestMain(TestCase):
         """Verify all APIs registered."""
         expected_urls = [
          ({}, {'GET', 'OPTIONS', 'HEAD'}, '/api/kytos/topology/v3/interfaces'),
+         ({}, {'POST', 'OPTIONS'}, '/api/kytos/topology/v3/metadata'),
          ({}, {'GET', 'OPTIONS', 'HEAD'}, '/api/kytos/topology/v3/switches'),
          ({}, {'GET', 'OPTIONS', 'HEAD'}, '/api/kytos/topology/v3/links'),
          ({}, {'GET', 'OPTIONS', 'HEAD'}, '/api/kytos/topology/v3/'),

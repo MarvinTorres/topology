@@ -1,6 +1,7 @@
 """Module to test the main napp file."""
 import time
 import json
+from io import BytesIO
 
 from unittest import TestCase
 from unittest.mock import MagicMock, create_autospec, patch
@@ -57,6 +58,7 @@ class TestMain(TestCase):
         """Verify all APIs registered."""
         expected_urls = [
          ({}, {'GET', 'OPTIONS', 'HEAD'}, '/api/kytos/topology/v3/interfaces'),
+         ({}, {'POST', 'OPTIONS'}, '/api/kytos/topology/v3/metadata'),
          ({}, {'GET', 'OPTIONS', 'HEAD'}, '/api/kytos/topology/v3/switches'),
          ({}, {'GET', 'OPTIONS', 'HEAD'}, '/api/kytos/topology/v3/restore'),
          ({}, {'GET', 'OPTIONS', 'HEAD'}, '/api/kytos/topology/v3/links'),
@@ -212,6 +214,148 @@ class TestMain(TestCase):
         response = api.post(url)
         self.assertEqual(response.status_code, 404, response.data)
         self.assertEqual(mock_switch.disable.call_count, 0)
+
+    @patch('napps.kytos.topology.main.Main.notify_metadata_changes')
+    def test_add_topology_metadata(self, mock_metadata_changes):
+        """Test add_add_topology"""
+        topology_init_state = {
+            'switches':
+            [
+                {
+                    'dpid':'00:00:00:00:00:00:00:01',
+                    'interfaces':[
+                        {'port':1,'name':'eth0'}
+                    ]
+                },
+                {
+                    'dpid':'00:00:00:00:00:00:00:02',
+                    'interfaces':[
+                        {'port':1,'name':'eth0'},
+                        {'port':2,'name':'eth1'}
+                    ]
+                },
+                {
+                    'dpid':'00:00:00:00:00:00:00:03',
+                    'interfaces':[
+                        {'port':1,'name':'eth0'}
+                    ]
+                }
+            ],
+            'links':
+            [
+                {
+                    'id': '00:00:00:00:00:00:00:01:1:00:00:00:00:00:00:00:02:2'
+                }
+            ]
+        }
+        mock_switches = {}
+        for switch_data in topology_init_state['switches']:
+            mock_switch = get_switch_mock(switch_data['dpid'])
+            mock_switch.interfaces = {}
+            for interface_data in switch_data['interfaces']:
+                mock_interface = get_interface_mock(interface_data['name'], interface_data['port'], mock_switch)
+                mock_switch.interfaces[interface_data['port']] = mock_interface
+            mock_switches[switch_data['dpid']] = mock_switch
+
+        # TODO: Add support for links in test_update_topology
+        mock_links = {}
+        for link_data in topology_init_state['links']:
+            mock_link = MagicMock(Link)
+            mock_link.id = link_data['id']
+            mock_links[link_data['id']] = mock_link
+
+        self.napp.controller.switches = mock_switches
+        self.napp.links = mock_links
+        api = get_test_client(self.napp.controller, self.napp)
+
+        topology_update = {
+            'switches':
+            [
+                {
+                    'dpid':'00:00:00:00:00:00:00:01',
+                    'metadata':{'color':'red','char':'A'},
+                    'interfaces':[
+                        {'port':1,'name':'eth0'}
+                    ]
+                },
+                {
+                    'dpid':'00:00:00:00:00:00:00:02',
+                    'metadata':{'color':'green','char':'A'},
+                    'interfaces':[
+                        {'port':1,'name':'eth0'},
+                        {'port':2,'name':'eth1','metadata':{'color':'blue'}}
+                    ]
+                },
+                {
+                    'dpid':'00:00:00:00:00:00:00:03',
+                    'metadata':{'color':'blue','char':'A'},
+                    'interfaces':[
+                        {'port':1,'name':'eth0','metadata':{'color':'pink'}}
+                    ]
+                },
+                {
+                    'dpid':'00:00:00:00:00:00:00:03',
+                    'metadata':{'color':'blue','char':'A'},
+                    'interfaces':[
+                        {'port':1,'name':'eth0','metadata':{'color':'green'}}
+                    ]
+                }
+            ],
+            'links':
+            [
+                {
+                    'id': '00:00:00:00:00:00:00:01:1:00:00:00:00:00:00:00:02:2',
+                    'metadata': {'color': 'purple'}
+                }
+            ]
+        }
+        url = f'{self.server_name_url}/v3/metadata'
+        response = api.post(url, data = {'file': (BytesIO(json.dumps(topology_update).encode()), 'file.json')})
+        self.assertEqual(response.status_code, 201, response.data)
+        for switch_update in topology_update['switches']:
+            mock_entity = mock_switches.get(switch_update['dpid'], None)
+            if mock_entity is None:
+                continue
+            new_metadata = switch_update.get('metadata', None)
+            if new_metadata is not None:
+                mock_entity.extend_metadata.assert_any_call(new_metadata)
+                mock_metadata_changes.assert_any_call(mock_entity, 'added')
+            for interface in switch_update['interfaces']:
+                mock_entity = mock_switches.get(switch_update['dpid'], None)
+                if mock_entity is None:
+                    continue
+                new_metadata = switch_update.get('metadata', None)
+                if new_metadata is not None:
+                    mock_entity.extend_metadata.assert_any_call(new_metadata)
+                    mock_metadata_changes.assert_any_call(mock_entity, 'added')
+        for link_update in topology_update['links']:
+            mock_entity = mock_links.get(link_update['id'], None)
+            if mock_entity is None:
+                continue
+            new_metadata = link_update.get('metadata', None)
+            if new_metadata is not None:
+                mock_entity.extend_metadata.assert_any_call(new_metadata)
+                mock_metadata_changes.assert_any_call(mock_entity, 'added')
+
+        # Invalid json data type
+        url = f'{self.server_name_url}/v3/metadata'
+        response = api.post(url, data = {'file': (BytesIO(json.dumps("Hello!").encode()), 'file.json')})
+        self.assertEqual(response.status_code, 400, response.data)
+
+        # Not a json file
+        url = f'{self.server_name_url}/v3/metadata'
+        response = api.post(url, data = {'file': (BytesIO("Hello!".encode()), 'file.json')})
+        self.assertEqual(response.status_code, 400, response.data)
+
+        # Empty field
+        url = f'{self.server_name_url}/v3/metadata'
+        response = api.post(url)
+        self.assertEqual(response.status_code, 400, response.data)
+
+        # Empty field
+        url = f'{self.server_name_url}/v3/metadata'
+        response = api.post(url, data = {'file': (BytesIO("Hello!".encode()), '')})
+        self.assertEqual(response.status_code, 400, response.data)
 
     def test_get_switch_metadata(self):
         """Test get_switch_metadata."""
