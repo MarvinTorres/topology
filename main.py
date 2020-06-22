@@ -170,15 +170,15 @@ class Main(KytosNApp):  # pylint: disable=too-many-public-methods
             return jsonify('Missing field: \'file\''), 400
         
         # Get file from field
-        file = request.files['file']
+        inputFile = request.files['file']
 
         # Check if field was empty
-        if file.filename is '':
+        if inputFile.filename is '':
             return jsonify('Empty field: \'file\''), 400
         
         ### Read and Decode the file
         # get the input stream
-        inputStream = file.stream
+        inputStream = inputFile.stream
         # Convert stream to python data structure
         try:
             inputObject = json.load(inputStream)

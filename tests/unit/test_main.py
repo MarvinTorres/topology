@@ -217,7 +217,7 @@ class TestMain(TestCase):
 
     @patch('napps.kytos.topology.main.Main.notify_metadata_changes')
     def test_add_topology_metadata(self, mock_metadata_changes):
-        """Test add_add_topology"""
+        """Test add_topology_metadata"""
         topology_init_state = {
             'switches':
             [
@@ -257,7 +257,6 @@ class TestMain(TestCase):
                 mock_switch.interfaces[interface_data['port']] = mock_interface
             mock_switches[switch_data['dpid']] = mock_switch
 
-        # TODO: Add support for links in test_update_topology
         mock_links = {}
         for link_data in topology_init_state['links']:
             mock_link = MagicMock(Link)
@@ -267,6 +266,7 @@ class TestMain(TestCase):
         self.napp.controller.switches = mock_switches
         self.napp.links = mock_links
         api = get_test_client(self.napp.controller, self.napp)
+        url = f'{self.server_name_url}/v3/metadata'
 
         topology_update = {
             'switches':
@@ -309,8 +309,9 @@ class TestMain(TestCase):
                 }
             ]
         }
-        url = f'{self.server_name_url}/v3/metadata'
-        response = api.post(url, data = {'file': (BytesIO(json.dumps(topology_update).encode()), 'file.json')})
+        file = BytesIO(json.dumps(topology_update).encode())
+        fileName = 'file.json'
+        response = api.post(url, data = {'file': (file, fileName)})
         self.assertEqual(response.status_code, 201, response.data)
         for switch_update in topology_update['switches']:
             mock_entity = mock_switches.get(switch_update['dpid'], None)
@@ -338,23 +339,25 @@ class TestMain(TestCase):
                 mock_metadata_changes.assert_any_call(mock_entity, 'added')
 
         # Invalid json data type
-        url = f'{self.server_name_url}/v3/metadata'
-        response = api.post(url, data = {'file': (BytesIO(json.dumps("Hello!").encode()), 'file.json')})
+        file = BytesIO(json.dumps('Hello!').encode())
+        fileName = 'file.json'
+        response = api.post(url, data = {'file': (file, fileName)})
         self.assertEqual(response.status_code, 400, response.data)
 
-        # Not a json file
-        url = f'{self.server_name_url}/v3/metadata'
-        response = api.post(url, data = {'file': (BytesIO("Hello!".encode()), 'file.json')})
+        # Not a json 
+        file = BytesIO('Hello!'.encode())
+        fileName = 'file.json'
+        response = api.post(url, data = {'file': (file, fileName)})
         self.assertEqual(response.status_code, 400, response.data)
 
-        # Empty field
-        url = f'{self.server_name_url}/v3/metadata'
+        # No Input Data
         response = api.post(url)
         self.assertEqual(response.status_code, 400, response.data)
 
         # Empty field
-        url = f'{self.server_name_url}/v3/metadata'
-        response = api.post(url, data = {'file': (BytesIO("Hello!".encode()), '')})
+        file = BytesIO(''.encode())
+        fileName = ''
+        response = api.post(url, data = {'file': (file, fileName)})
         self.assertEqual(response.status_code, 400, response.data)
 
     def test_get_switch_metadata(self):
