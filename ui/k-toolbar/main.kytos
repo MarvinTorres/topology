@@ -1,0 +1,37 @@
+<template>
+    <k-toolbar-item icon="map" tooltip="Napp Topology">
+        <k-accordion>
+            <k-accordion-item title="Update Metadata">
+                <input type="file" name="file" @change="fileChange($event.target.name, $event.target.files)">
+                </input>
+                <k-button title="Upload" :on_click="update_topology">
+                </k-button>
+            </k-accordion-item>
+        </k-accordion>
+    </k-toolbar-item>
+</template>
+<script>
+module.exports = {
+    data: function() {
+        return {
+            input : new FormData()
+        }
+    },
+    methods: {
+        update_topology(){
+            var self = this
+            $.ajax({
+                type:"POST",
+                url: this.$kytos_server_api + "kytos/topology/v3/metadata",
+                async: true,
+                data: self.input,
+                processData: false,
+                contentType: false
+            });
+        },
+        fileChange(fieldName, files){
+            this.input.set(fieldName, files[0]);
+        }
+    }
+}
+</script>
