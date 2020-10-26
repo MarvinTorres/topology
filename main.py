@@ -198,13 +198,20 @@ class Main(KytosNApp):  # pylint: disable=too-many-public-methods
                 # skip element if invalid
                 if not isinstance(switch_data, dict):
                     continue
-                # Get dpid and switch with that dpid
+                # Get dpid
                 try:
                     dpid = switch_data['dpid']
-                    switch = self.controller.switches[dpid]
-                # Skip if getting the dpid or the switch fails
+                # Skip if getting the dpid fails
                 except KeyError: 
                     continue
+                # Get the switch with the dpid if it exists
+                switch = self.controller.switches.get(dpid,None)
+                # If the switch doesn't exist, create it
+                if switch is None:
+                    switch = Switch(dpid)
+                    switch.disable()
+                    self.controller.add_new_switch(switch)
+                    self.notify_metadata_changes(switch,'added')
 
                 # get metadata
                 switch_metadata = switch_data.get('metadata', None)
@@ -223,14 +230,21 @@ class Main(KytosNApp):  # pylint: disable=too-many-public-methods
                         # skip element if invalid
                         if not isinstance(interface_data, dict):
                             continue
-                        # Get port and interface at that port
+                        # Get port and name
                         try:
                             port = interface_data['port']
-                            interface = switch.interfaces[port]
-                        # Skip if getting the port or interface fails
+                            name = interface_data['name']
+                        # Skip if getting the port fails
                         except KeyError: 
                             continue
-                        
+                        # Get the interface at the port if it exists
+                        interface = switch.interfaces.get(port, None)
+                        # If the interface does not exist, create it
+                        if interface is None:
+                            interface = Interface(name ,port, switch)
+                            switch.update_interface(interface)
+                            self.notify_metadata_changes(interface,'added')
+
                         # get metadata
                         interface_metadata = interface_data.get('metadata', None)
                         # Confirm it is of the right types
@@ -248,13 +262,25 @@ class Main(KytosNApp):  # pylint: disable=too-many-public-methods
                 # skip element if invalid
                 if not isinstance(link_data, dict):
                     continue
-                # Get id and link with that id
+                # Get link id and link with that id
                 try:
                     link_id = link_data['id']
-                    link = self.links[link_id]
+                    link_components = link_id.split(':', 3)
+                    link_switch_a = self.controller.switches[link_components[0]]
+                    link_endpoint_a = link_switch_a.interfaces[link_components[1]]
+                    link_switch_b = self.controller.switches[link_components[2]]
+                    link_endpoint_b = link_switch_b.interfaces[link_components[3]]
                 # Skip if getting the id or the link fails
                 except KeyError: 
                     continue
+                new_link = Link(link_endpoint_a, link_endpoint_b)
+                link = self.links.get(new_link.id, None)
+
+                if link is None:
+                    link = new_link
+                    link.disable()
+                    self.links[link.id] = link
+                    self.notify_metadata_changes(link,'added')
 
                 # get metadata
                 link_metadata = link_data.get('metadata', None)
