@@ -202,7 +202,8 @@ class Main(KytosNApp):  # pylint: disable=too-many-public-methods
                 try:
                     dpid = switch_data['dpid']
                 # Skip if getting the dpid fails
-                except KeyError: 
+                except KeyError as e:
+                    log.error(e)
                     continue
                 # Get the switch with the dpid if it exists
                 switch = self.controller.switches.get(dpid,None)
@@ -235,7 +236,8 @@ class Main(KytosNApp):  # pylint: disable=too-many-public-methods
                             port = interface_data['port']
                             name = interface_data['name']
                         # Skip if getting the port fails
-                        except KeyError: 
+                        except KeyError as e:
+                            log.error(e) 
                             continue
                         # Get the interface at the port if it exists
                         interface = switch.interfaces.get(port, None)
@@ -291,6 +293,7 @@ class Main(KytosNApp):  # pylint: disable=too-many-public-methods
                     link_switch_a = self.controller.switches[result_switches[0]]
                     link_switch_b = self.controller.switches[result_switches[1]]
 
+                    # Instantiate the link's interfaces before instantiating the link
                     if interface_a not in link_switch_a.interfaces:
                             interface = Interface(interface_a, port_a, link_switch_a)
                             link_switch_a.update_interface(interface)
@@ -324,6 +327,8 @@ class Main(KytosNApp):  # pylint: disable=too-many-public-methods
                     link.extend_metadata(link_metadata)
                     # Update Persistent
                     self.notify_metadata_changes(link,'added')
+        # Notify topology update to subscribed NApps
+        self.notify_topology_update()
         ### return confirmation that the receive file was processed correctly
         return jsonify('Operation successful'), 201
 
