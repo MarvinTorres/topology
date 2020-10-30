@@ -2,7 +2,7 @@
 
 Manage the network topology
 """
-import time, json
+import time, json, re
 
 from flask import jsonify, request
 
@@ -265,17 +265,51 @@ class Main(KytosNApp):  # pylint: disable=too-many-public-methods
                 # Get link id and link with that id
                 try:
                     link_id = link_data['id']
-                    link_components = link_id.split(':', 3)
-                    link_switch_a = self.controller.switches[link_components[0]]
-                    link_endpoint_a = link_switch_a.interfaces[link_components[1]]
-                    link_switch_b = self.controller.switches[link_components[2]]
-                    link_endpoint_b = link_switch_b.interfaces[link_components[3]]
+                    # Regex to get interfaces from test string (link)
+                    result_switches = re.split(":[a-zA-Z0-9][^a-zA-Z0-9]|:[a-zA-Z0-9]$", link_id)
+
+                    # Clean up resuleInterfaces list
+                    for item in result_switches:
+                        if (item == ""):
+                            result_switches.remove(item)
+
+                    # Temp string to remove just the interfaces but not their ports
+                    temp = link_id.replace(result_switches[0], "").replace(result_switches[1], "")
+
+                    # Regex to get ports in temp string and store them in list
+                    result_ports = re.split(":|::", temp)
+
+                    # Clean up result_ports list
+                    for item in result_ports:
+                        if (item == ""):
+                            result_ports.remove(item)
+                    
+                    interface_a = result_switches[0] + ":" + result_ports[0]
+                    interface_b = result_switches[1] + ":" + result_ports[1]
+                    port_a = result_ports[0]
+                    port_b = result_ports[1]
+                    link_switch_a = self.controller.switches[result_switches[0]]
+                    link_switch_b = self.controller.switches[result_switches[1]]
+
+                    if interface_a not in link_switch_a.interfaces:
+                            interface = Interface(interface_a, port_a, link_switch_a)
+                            link_switch_a.update_interface(interface)
+                            self.notify_metadata_changes(interface,'added')
+
+                    if interface_b not in link_switch_b.interfaces:
+                            interface = Interface(interface_b, port_b, link_switch_b)
+                            link_switch_b.update_interface(interface)
+                            self.notify_metadata_changes(interface,'added')
+
+                    link_endpoint_a = link_switch_a.interfaces[int(port_a)]
+                    link_endpoint_b = link_switch_b.interfaces[int(port_b)]
+        
                 # Skip if getting the id or the link fails
-                except KeyError: 
+                except KeyError as e: 
+                    log.error(e)
                     continue
                 new_link = Link(link_endpoint_a, link_endpoint_b)
                 link = self.links.get(new_link.id, None)
-
                 if link is None:
                     link = new_link
                     link.disable()
@@ -772,7 +806,7 @@ class Main(KytosNApp):  # pylint: disable=too-many-public-methods
         elif 'interface' in event.content:
             store = self.store_items.get('interfaces')
             obj = event.content.get('interface')
-            namespace = 'kytos.topology.iterfaces.metadata'
+            namespace = 'kytos.topology.interfaces.metadata'
         elif 'link' in event.content:
             store = self.store_items.get('links')
             obj = event.content.get('link')
