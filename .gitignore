@@ -94,3 +94,6 @@ ENV/
 .ropeproject
 *.png
 *.rrd
+
+# VSCode settings
+.vscode/

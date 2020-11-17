@@ -268,7 +268,8 @@ class Main(KytosNApp):  # pylint: disable=too-many-public-methods
                 try:
                     link_id = link_data['id']
                     # Regex to get interfaces from test string (link)
-                    result_switches = re.split(":[a-zA-Z0-9][^a-zA-Z0-9]|:[a-zA-Z0-9]$", link_id)
+                    # Note that the node names must be in the form "xx:xx:xx:xx:xx:xx:xx:xx"
+                    result_switches = re.split("(?<=^.{23}).+?(?=:)[:]|:[a-zA-Z0-9]*[a-zA-Z0-9]$", link_id)
 
                     # Clean up resuleInterfaces list
                     for item in result_switches:
