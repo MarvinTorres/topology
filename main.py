@@ -295,12 +295,12 @@ class Main(KytosNApp):  # pylint: disable=too-many-public-methods
                     link_switch_b = self.controller.switches[result_switches[1]]
 
                     # Instantiate the link's interfaces before instantiating the link
-                    if interface_a not in link_switch_a.interfaces:
+                    if int(port_a) not in link_switch_a.interfaces.keys():
                             interface = Interface(interface_a, port_a, link_switch_a)
                             link_switch_a.update_interface(interface)
                             self.notify_metadata_changes(interface,'added')
 
-                    if interface_b not in link_switch_b.interfaces:
+                    if int(port_b) not in link_switch_b.interfaces.keys():
                             interface = Interface(interface_b, port_b, link_switch_b)
                             link_switch_b.update_interface(interface)
                             self.notify_metadata_changes(interface,'added')
@@ -330,6 +330,10 @@ class Main(KytosNApp):  # pylint: disable=too-many-public-methods
                     self.notify_metadata_changes(link,'added')
         # Notify topology update to subscribed NApps
         self.notify_topology_update()
+
+        #for switch in self.controller.switches.values():
+         #   for key, interface in switch.interfaces.items():
+          #      log.info(str(key) + "| " + str(interface) + "|||" + str(interface.metadata))
         ### return confirmation that the receive file was processed correctly
         return jsonify('Operation successful'), 201
 
